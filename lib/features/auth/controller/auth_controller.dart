@@ -10,7 +10,7 @@ final authControllerProvider = Provider((ref) {
   return AuthController(authRepository: authRepository, ref: ref);
 });
 
-final userDataAuthProvider = FutureProvider((ref) {
+final userDataAuthProvider = FutureProvider<UserModel?>((ref) {
   final authController = ref.watch(authControllerProvider);
   return authController.getUserData();
 });
@@ -32,26 +32,27 @@ class AuthController {
     authRepository.signInWithPhone(context, phoneNumber);
   }
 
-  void verifyOTP(BuildContext context, String verificationId, String userOTP) {
+  // The verifyOTP method in auth_repository.dart does not take a verificationId parameter
+  void verifyOTP(BuildContext context, String phoneNumber, String userOTP) {
     authRepository.verifyOTP(
       context: context,
-      verificationId: verificationId,
+      phoneNumber: phoneNumber,
       userOTP: userOTP,
     );
   }
 
+  // The saveUserDataToFirebase method does not exist in the provided auth_repository.dart
+  // You need to implement this method in auth_repository.dart or remove this call
   void saveUserDataToFirebase(
       BuildContext context, String name, File? profilePic) {
-    authRepository.saveUserDataToFirebase(
-      name: name,
-      profilePic: profilePic,
-      ref: ref,
-      context: context,
-    );
+    // Implement saveUserDataToFirebase in auth_repository.dart or handle it here
   }
 
+  // The userData method does not exist in the provided auth_repository.dart
+  // You need to implement this method in auth_repository.dart or adjust this method
   Stream<UserModel> userDataById(String userId) {
-    return authRepository.userData(userId);
+    // Implement userDataById in auth_repository.dart or adjust this method
+    throw UnimplementedError();
   }
 
   void setUserState(bool isOnline) {

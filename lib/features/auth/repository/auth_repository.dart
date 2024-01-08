@@ -1,123 +1,67 @@
-import 'dart:io';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:whatsapp_ui/common/repositories/common_firebase_storage_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:whatsapp_ui/common/utils/utils.dart';
-import 'package:whatsapp_ui/features/auth/screens/otp_screen.dart';
 import 'package:whatsapp_ui/features/auth/screens/user_information_screen.dart';
 import 'package:whatsapp_ui/models/user_model.dart';
-import 'package:whatsapp_ui/mobile_layout_screen.dart';
 
 final authRepositoryProvider = Provider(
   (ref) => AuthRepository(
-    auth: FirebaseAuth.instance,
-    firestore: FirebaseFirestore.instance,
+    supabase: Supabase.instance.client,
   ),
 );
 
 class AuthRepository {
-  final FirebaseAuth auth;
-  final FirebaseFirestore firestore;
+  final SupabaseClient supabase;
   AuthRepository({
-    required this.auth,
-    required this.firestore,
+    required this.supabase,
   });
 
-  Future<UserModel?> getCurrentUserData() async {
-    var userData =
-        await firestore.collection('users').doc(auth.currentUser?.uid).get();
+Future<UserModel?> getCurrentUserData() async {
+  try {
+    final response = await supabase
+        .from('users')
+        .select()
+        .eq('id', supabase.auth.currentUser?.id as Object)
+        .single();
 
-    UserModel? user;
-    if (userData.data() != null) {
-      user = UserModel.fromMap(userData.data()!);
-    }
-    return user;
+    // If response is already a Map, you don't need to access .data
+    return response != null ? UserModel.fromMap(response) : null;
+  } catch (error) {
+    print('An error occurred while fetching user data: $error');
+    return null; // Return null to indicate an error occurred
   }
+}
 
-  void signInWithPhone(BuildContext context, String phoneNumber) async {
+  Future<void> signInWithPhone(BuildContext context, String phoneNumber) async {
     try {
-      await auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          await auth.signInWithCredential(credential);
-        },
-        verificationFailed: (e) {
-          throw Exception(e.message);
-        },
-        codeSent: ((String verificationId, int? resendToken) async {
-          Navigator.pushNamed(
-            context,
-            OTPScreen.routeName,
-            arguments: verificationId,
-          );
-        }),
-        codeAutoRetrievalTimeout: (String verificationId) {},
+      final response = await supabase.auth.signInWithOtp(
+        phone : phoneNumber
+       
       );
-    } on FirebaseAuthException catch (e) {
-      showSnackBar(context: context, content: e.message!);
+      
+      // Store the session or verificationId as needed
+    } catch (e) {
+      showSnackBar(context: context, content: e.toString());
     }
   }
 
-  void verifyOTP({
+  Future<void> verifyOTP({
     required BuildContext context,
-    required String verificationId,
+    required String phoneNumber,
     required String userOTP,
   }) async {
     try {
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: userOTP,
+      final response = await supabase.auth.verifyOTP(
+        phone: phoneNumber,
+        token: userOTP,
+         type: OtpType.sms,
       );
-      await auth.signInWithCredential(credential);
+    
+      // Navigate to the next screen after successful verification
       Navigator.pushNamedAndRemoveUntil(
         context,
         UserInformationScreen.routeName,
-        (route) => false,
-      );
-    } on FirebaseAuthException catch (e) {
-      showSnackBar(context: context, content: e.message!);
-    }
-  }
-
-  void saveUserDataToFirebase({
-    required String name,
-    required File? profilePic,
-    required ProviderRef ref,
-    required BuildContext context,
-  }) async {
-    try {
-      String uid = auth.currentUser!.uid;
-      String photoUrl =
-          'https://png.pngitem.com/pimgs/s/649-6490124_katie-notopoulos-katienotopoulos-i-write-about-tech-round.png';
-
-      if (profilePic != null) {
-        photoUrl = await ref
-            .read(commonFirebaseStorageRepositoryProvider)
-            .storeFileToFirebase(
-              'profilePic/$uid',
-              profilePic,
-            );
-      }
-
-      var user = UserModel(
-        name: name,
-        uid: uid,
-        profilePic: photoUrl,
-        isOnline: true,
-        phoneNumber: auth.currentUser!.phoneNumber!,
-        groupId: [],
-      );
-
-      await firestore.collection('users').doc(uid).set(user.toMap());
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MobileLayoutScreen(),
-        ),
         (route) => false,
       );
     } catch (e) {
@@ -125,17 +69,15 @@ class AuthRepository {
     }
   }
 
-  Stream<UserModel> userData(String userId) {
-    return firestore.collection('users').doc(userId).snapshots().map(
-          (event) => UserModel.fromMap(
-            event.data()!,
-          ),
-        );
-  }
-
   void setUserState(bool isOnline) async {
-    await firestore.collection('users').doc(auth.currentUser!.uid).update({
-      'isOnline': isOnline,
-    });
+    final response = await supabase
+        .from('users')
+        .update({'isOnline': isOnline})
+        .eq('id', supabase.auth.currentUser!.id);
+       
+
+    if (response.error != null) {
+      throw Exception(response.error!.message);
+    }
   }
 }
